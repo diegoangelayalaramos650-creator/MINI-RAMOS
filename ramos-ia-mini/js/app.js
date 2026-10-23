@@ -632,7 +632,9 @@
   }
 
   // ---------------------------------------------------------------- Ajustes
-  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  // Vista previa embebida (p. ej. Artifact de claude.ai): el marco bloquea el micrófono y las descargas.
+  var CONFIG = window.RAMOS_CONFIG || {};
+  var SR = CONFIG.embeddedPreview ? null : (window.SpeechRecognition || window.webkitSpeechRecognition);
   var isIOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var isEmbedded = (function () { try { return window.self !== window.top; } catch (e) { return true; } })();
   function isStandalone() {
@@ -663,7 +665,7 @@
       '<h3 class="section-title">Datos</h3>' +
       '<div class="alert info"><b>Importante:</b> los productos, precios, stock y ventas se guardan <b>solo en este navegador</b>. Se pierden si borrás los datos de Safari, usás navegación privada o desinstalás la app. Exportá una copia si los necesitás.</div>' +
       '<p class="muted" id="persistInfo"></p>' +
-      '<div class="btn-row"><button class="btn ghost" data-action="exportData">Exportar copia</button>' +
+      '<div class="btn-row"><button class="btn ghost" data-action="exportData">' + (CONFIG.embeddedPreview ? 'Copiar datos' : 'Exportar copia') + '</button>' +
       '<button class="btn danger" data-action="resetData">Reiniciar demo</button></div>' +
       '<p class="muted" style="margin-top:18px;font-size:12px">RAMOS IA MINI · prototipo independiente de demostración. No está conectado a la base de datos de RAMOS IA.</p>');
     if (navigator.storage && navigator.storage.persisted) {
@@ -677,6 +679,16 @@
     try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(function () {}); } catch (e) { /* sin soporte */ }
   }
   function exportData() {
+    if (CONFIG.embeddedPreview) {
+      var json = JSON.stringify(state, null, 2);
+      var done = function () { toast('Copia de los datos copiada al portapapeles'); };
+      var fallback = function () {
+        openSheet('Copia de los datos', '<p class="muted">Seleccioná y copiá este texto para guardarlo.</p><label class="field"><span>Datos (JSON)</span><textarea id="exportText" rows="10" readonly>' + esc(json) + '</textarea></label>');
+        var t = $('#exportText'); if (t) { t.focus(); t.select(); }
+      };
+      try { navigator.clipboard.writeText(json).then(done, fallback); } catch (e) { fallback(); }
+      return;
+    }
     var blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
@@ -721,7 +733,9 @@
   function openVoice() {
     voice.text = ''; voice.result = null; voice.error = null;
     if (!SR || !window.isSecureContext) {
-      voice.error = !window.isSecureContext
+      voice.error = CONFIG.embeddedPreview
+        ? 'En esta vista previa el navegador no permite usar el micrófono de la página. Tocá el cuadro de texto y usá el 🎤 del teclado del iPhone para dictar (es el dictado real de iOS). Para la voz de Safari, abrí la versión publicada en GitHub Pages.'
+        : !window.isSecureContext
         ? 'El micrófono del navegador requiere una dirección segura (https://). Mientras tanto podés escribir o usar el 🎤 del teclado.'
         : 'Este navegador no tiene reconocimiento de voz web. Tocá el cuadro de texto y usá el 🎤 del teclado del iPhone para dictar.';
       renderVoiceReview();
@@ -837,7 +851,8 @@
   function renderVoiceReview() {
     var canMic = !!SR && window.isSecureContext;
     voiceSheet(
-      (voice.error ? '<div class="alert red">' + esc(voice.error) + '</div>' : '') +
+      (voice.error ? '<div class="alert red">' + esc(voice.error) + '</div>' :
+        CONFIG.embeddedPreview ? '<div class="alert info">Vista previa: dictá con el 🎤 del teclado del iPhone.</div>' : '') +
       '<label class="field"><span>' + (voice.text ? 'Texto reconocido (podés corregirlo)' : 'Escribí el pedido o dictalo con el 🎤 del teclado') + '</span>' +
       '<textarea id="voiceText" rows="2" placeholder="Ej: dos kilos de milanesas y tres kilos de pata muslo" enterkeyhint="done">' + esc(voice.text) + '</textarea></label>' +
       '<button class="btn navy block" data-action="voiceInterpret">Interpretar texto</button>' +
